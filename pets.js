@@ -44,22 +44,19 @@ switch (subcommand) {
       name: name,
     };
 
-    readFile('pets.json', 'utf-8')
-      .then((str) =>{
-        
+    readFile("pets.json", "utf-8")
+      .then((str) => {
         const data = JSON.parse(str);
 
         data.push(newPet);
 
-        writeFile("pets.json", JSON.stringify(data))
-        .catch((err) =>{
+        writeFile("pets.json", JSON.stringify(data)).catch((err) => {
           console.error(err);
-        })
-        
-      
-      }).catch((err) => {
-        console.error(err);
+        });
       })
+      .catch((err) => {
+        console.error(err);
+      });
 
     break;
   }
