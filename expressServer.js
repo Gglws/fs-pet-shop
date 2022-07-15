@@ -19,15 +19,11 @@ app.post("/pets", (req, res) => {
   const name = newPet[2];
 
   //helps prevent bad input
-  if (!age || !kind || !name) {
+  if (!age || !kind || !name || newPet.length !== 3) {
     console.error("Please enter age, kind, and name for the new pet.");
     next();
   }
 
-  if (newPet.length !== 3) {
-    console.error("Please enter age, kind, and name for the new pet.");
-    next();
-  } else {
     //reads file, adds new pet object to existing pets, writes file
     readFile("pets.json", "utf8")
       .then((str) => {
@@ -56,7 +52,7 @@ app.post("/pets", (req, res) => {
       .catch((err) => {
         error500(res, err);
       });
-  }
+  
 });
 
 //post error handlers.
@@ -65,6 +61,10 @@ app.post("/", (req, res) => {
 });
 
 app.post("/:id", (req, res) => {
+  next();
+});
+
+app.post("/pets/:id", (req, res) => {
   next();
 });
 
