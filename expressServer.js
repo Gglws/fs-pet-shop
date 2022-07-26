@@ -11,7 +11,9 @@ app.use(express.text());
 //user can create a new pet by entering an age, kind, and name
 //using the /pets path
 app.post("/pets", (req, res) => {
+  
   const newPet = req.body.split(" ");
+
 
   //variables for new pet object
   const age = Number(newPet[0]);
@@ -82,7 +84,7 @@ app.get("/pets", (req, res) => {
       res.send(str);
     })
     .catch((err) => {
-      error500(res, err);
+      error500(res, err);;
     });
 });
 
