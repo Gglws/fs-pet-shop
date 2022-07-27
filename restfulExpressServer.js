@@ -1,8 +1,24 @@
 import express from "express";
+import basicAuth from "express-basic-auth";
+
 const app = express();
 
-import { writeFile } from "fs/promises";
-import { readFile } from "fs/promises";
+import pg from "pg";
+
+const pool = new pg.Pool({
+  database: "petshop",
+});
+
+app.use(basicAuth({
+  users: {'admin': 'meowmix'},
+  unauthorizedResponse: getUnauthorizedResponse
+}))
+
+function getUnauthorizedResponse(req) {
+  return req.auth
+      ? ('Unauthorized: Credentials ' + req.auth.user + ':' + req.auth.password + ' rejected')
+      : 'Unauthorized'
+}
 
 app.use(express.json());
 
@@ -19,33 +35,13 @@ app.post("/pets", (req, res) => {
     next();
   }
 
-  //reads file, adds new pet object to existing pets, writes file
-  readFile("pets.json", "utf8")
-    .then((str) => {
-      let existingPets = [];
-      let newId = 0;
+  var sql = `INSERT INTO pets (name, kind, age) VALUES ('${name}', '${kind}', ${age});`;
 
-      if (str.length !== 0) {
-        existingPets = JSON.parse(str);
-        newId = existingPets.length + 1;
-      }
-
-      const newPet = {
-        id: newId,
-        age: age,
-        kind: kind,
-        name: name,
-      };
-
-      existingPets.push(newPet);
-      writeFile("pets.json", JSON.stringify(existingPets))
-        .then(() => {
-          res.set("Content-Type", "application/json");
-          res.send(newPet);
-        })
-        .catch((err) => {
-          error500(res, err);
-        });
+  pool
+    .query(sql)
+    .then(() => {
+      res.set("Content-Type", "application/json");
+      res.send(newPet);
     })
     .catch((err) => {
       error500(res, err);
@@ -73,10 +69,15 @@ app.use((err, req, res, next) => {
 
 //general get request for all pets
 app.get("/pets", (req, res) => {
-  readFile("pets.json", "utf8")
-    .then((str) => {
+  var sql = "SELECT * FROM pets;";
+
+  res.setHeader("Authorization", "Basic ", "whatever");
+
+  pool
+    .query(sql)
+    .then((result) => {
       res.set("Content-Type", "application/json");
-      res.send(str);
+      res.send(result.rows);
     })
     .catch((err) => {
       error500(res, err);
@@ -87,21 +88,16 @@ app.get("/pets", (req, res) => {
 app.get("/pets/:id", (req, res, next) => {
   const petId = Number(req.params.id);
 
-  readFile("pets.json", "utf8")
-    .then((str) => {
-      const data = JSON.parse(str);
-      let found = false;
+  var sql = `SELECT * FROM pets WHERE id = ${petId};`;
 
-      data.forEach((el) => {
-        if (el.id === petId) {
-          res.set("Content-Type", "application/json");
-          res.send(el);
-          found = true;
-        }
-      });
-
-      if (!found) {
+  pool
+    .query(sql)
+    .then((result) => {
+      if (result.rows.length === 0) {
         next("Not found");
+      } else {
+        res.set("Content-Type", "application/json");
+        res.send(result.rows);
       }
     })
     .catch((err) => {
@@ -128,37 +124,27 @@ app.use((err, req, res, next) => {
 app.patch("/pets/:id", (req, res, next) => {
   const petId = Number(req.params.id);
 
-  readFile("pets.json", "utf8")
-    .then((str) => {
-      const data = JSON.parse(str);
-      let found = false;
-      let currentPet = "";
+  var sql = `SELECT * FROM pets WHERE id = ${petId};`;
 
-      data.forEach((el) => {
-        if (el.id === petId) {
-          currentPet = el;
-          found = true;
-        }
-      });
-
-      //function for updating pet and saving to file
-      let updatePet = (newInfo) => {
-        currentPet[Object.keys(newInfo)] = newInfo[Object.keys(newInfo)];
-
-        writeFile("pets.json", JSON.stringify(data))
-          .then(() => {
-            res.set("Content-Type", "application/json");
-            res.send(currentPet);
-          })
-          .catch((err) => {
-            error500(res, err);
-          });
-      };
-
-      if (!found) {
+  pool
+    .query(sql)
+    .then((result) => {
+      if (result.rows.length === 0) {
         next("Not found");
       } else {
         const newInfo = req.body;
+
+        let updatePet = (newInfo) => {
+          var sqlSelector = Object.keys(newInfo);
+          var sqlValue = newInfo[Object.keys(newInfo)];
+
+          var sql2 = `UPDATE pets SET ${sqlSelector} = '${sqlValue}' WHERE id = ${petId}`;
+
+          pool.query(sql2).then(() => {
+            res.set("Content-Type", "text/plain");
+            res.send(`Updated`);
+          });
+        };
 
         //testers for valid information
         if (
@@ -186,7 +172,7 @@ app.patch("/pets/:id", (req, res, next) => {
     });
 });
 
-//get error handlers
+// patch error handlers
 app.patch("/", (req, res) => {
   next();
 });
@@ -201,33 +187,24 @@ app.use((err, req, res, next) => {
   res.send("Not found");
 });
 
-//get request for specific pet id
+//Delete request for specific pet id
 app.delete("/pets/:id", (req, res, next) => {
   const petId = Number(req.params.id);
 
-  readFile("pets.json", "utf8")
-    .then((str) => {
-      const data = JSON.parse(str);
-      let found = false;
+  var sql = `SELECT * FROM pets WHERE id = ${petId};`;
 
-      data.forEach((el) => {
-        if (el.id === petId) {
-          data.splice(el.id - 1, 1);
-          found = true;
-        }
-      });
+  var sql2 = `DELETE FROM pets WHERE id = ${petId};`;
 
-      if (!found) {
+  pool
+    .query(sql)
+    .then((result) => {
+      if (result.rows.length === 0) {
         next("Not found");
       } else {
-        writeFile("pets.json", JSON.stringify(data))
-          .then(() => {
-            res.set("Content-Type", "text/plain");
-            res.send("Successfully deleted pet.");
-          })
-          .catch((err) => {
-            error500(res, err);
-          });
+        pool.query(sql2).then(() => {
+          res.set("Content-Type", "TEXT/plain");
+          res.send(`Deleted ${result.rows[0]["name"]} from database.`);
+        });
       }
     })
     .catch((err) => {
@@ -235,7 +212,7 @@ app.delete("/pets/:id", (req, res, next) => {
     });
 });
 
-//get error handlers
+//delete error handlers
 app.delete("/", (req, res) => {
   next();
 });
@@ -250,11 +227,12 @@ app.use((err, req, res, next) => {
   res.send("Not found");
 });
 
-//internal server error handler function
+// //internal server error handler function
 let error500 = (res, err) => {
   console.error(err.stack);
   res.status(500);
   res.set("Content-Type", "text/plain");
+  pool.end();
   return res.send("Internal Server Error");
 };
 
